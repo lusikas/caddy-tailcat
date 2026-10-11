@@ -35,14 +35,38 @@ func TestUnmarshalCaddyfile(t *testing.T) {
 		t.Errorf("got %+v", tr)
 	}
 
+	tr, err = parse(t, "tailcat tcABC {\n port 8080\n}")
+	if err != nil || tr.Port != 8080 {
+		t.Errorf("port: %+v, %v", tr, err)
+	}
+
 	tr, err = parse(t, "tailcat {\n address {env.X}\n}")
 	if err != nil || tr.Address != "{env.X}" {
 		t.Errorf("block address: %+v, %v", tr, err)
 	}
 
-	for _, bad := range []string{"tailcat a b", "tailcat {\n bogus 1\n}", "tailcat {\n dial_timeout nope\n}"} {
+	for _, bad := range []string{"tailcat a b", "tailcat {\n bogus 1\n}", "tailcat {\n dial_timeout nope\n}", "tailcat {\n port 0\n}", "tailcat {\n port 99999\n}", "tailcat {\n port http\n}"} {
 		if _, err := parse(t, bad); err == nil {
 			t.Errorf("%q: expected an error", bad)
+		}
+	}
+}
+
+func TestPortFor(t *testing.T) {
+	for _, c := range []struct {
+		port uint16
+		addr string
+		want uint16
+	}{
+		{0, "127.0.0.1:8080", 8080}, // upstream's port
+		{0, "localhost", 80},        // upstream without a port
+		{0, "localhost:0", 80},
+		{0, "[::1]:3000", 3000},
+		{9000, "127.0.0.1:8080", 9000}, // configured port wins
+		{9000, "localhost", 9000},
+	} {
+		if got := (&Transport{Port: c.port}).portFor(c.addr); got != c.want {
+			t.Errorf("Port=%d upstream %q: got %d, want %d", c.port, c.addr, got, c.want)
 		}
 	}
 }
@@ -121,6 +145,16 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got != "hello /x" {
+		t.Errorf("got %q", got)
+	}
+
+	// With Port set, the upstream's own port is irrelevant.
+	tr.Port = 8080
+	got, err = get(t, tr, "//localhost:1234/y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "hello /y" {
 		t.Errorf("got %q", got)
 	}
 }

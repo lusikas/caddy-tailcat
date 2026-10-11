@@ -20,15 +20,28 @@ listens on a public port.
 3. Caddyfile:
 
        blog.example.com {
-           reverse_proxy 127.0.0.1:8080 {
+           reverse_proxy localhost {
                transport tailcat {
                    address {env.TAILCAT_ADDR}
+                   port 8080                  # port on the tailcat server
                    dial_timeout 4s            # how long to wait before the 504
                }
            }
        }
 
-The upstream's host is ignored; its port is the port on the tailcat server.
+## Ports
+
+The `reverse_proxy` upstream is only a placeholder: its host is ignored, since
+the connection goes to the tailcat server, not to that host. The port to dial
+on the tailcat server is the `port` option. Without it, the upstream's port is
+used (`reverse_proxy 127.0.0.1:8080` means port 8080 on the tailcat server,
+80 if the upstream has no port), which is the same number you give to
+`tailcat serve`.
+
+The port is a port *of the tailcat server*, not of your laptop. To serve a
+different local port under another number, use a port mapping on the
+`tailcat serve` side: `tailcat serve --key=blog 80:8080` serves tailcat port 80
+by proxying to localhost:8080, so Caddy can use the default port.
 
 ## Build
 
